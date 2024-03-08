@@ -21,6 +21,7 @@ from taskweaver.llm.qwen import QWenService, QWenServiceConfig
 from taskweaver.llm.sentence_transformer import SentenceTransformerService
 from taskweaver.llm.util import ChatMessageType, format_chat_message
 from taskweaver.llm.zhipuai import ZhipuAIService
+from taskweaver.llm.cm import CmService
 
 llm_completion_config_map = {
     "openai": OpenAIService,
@@ -31,6 +32,7 @@ llm_completion_config_map = {
     "google_genai": GoogleGenAIService,
     "qwen": QWenService,
     "zhipuai": ZhipuAIService,
+    "cm": CmService,
 }
 
 # TODO
@@ -62,6 +64,8 @@ class LLMApi(object):
             self._set_completion_service(QWenService)
         elif self.config.api_type == "zhipuai":
             self._set_completion_service(ZhipuAIService)
+        elif self.config.api_type == "cm":
+            self._set_completion_service(CmService)
         else:
             raise ValueError(f"API type {self.config.api_type} is not supported")
 
@@ -81,6 +85,8 @@ class LLMApi(object):
             self.embedding_service = PlaceholderEmbeddingService(
                 "Azure ML does not support embeddings yet. Please configure a different embedding API.",
             )
+        elif self.config.embedding_api_type == "cm":
+            self._set_embedding_service(CmService)
         else:
             raise ValueError(
                 f"Embedding API type {self.config.embedding_api_type} is not supported",
