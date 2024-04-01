@@ -1,5 +1,10 @@
 # Code Execution
 
+>💡We have set the `container` mode as default for code execution, especially when the usage of the agent
+is open to untrusted users. Refer to [Docker Security](https://docs.docker.com/engine/security/) for better understanding
+of the security features of Docker. To opt for the `local` mode, you need to explicitly set the `execution_service.kernel_mode` 
+parameter in the `taskweaver_config.json` file to `local`.
+
 TaskWeaver is a code-first agent framework, which means that it always converts the user request into code 
 and executes the code to generate the response. In our current implementation, we use a Jupyter Kernel
 to execute the code. We choose Jupyter Kernel because it is a well-established tool for interactive computing,
@@ -8,22 +13,20 @@ and it supports many programming languages.
 ## Two Modes of Code Execution
 
 TaskWeaver supports two modes of code execution: `local` and `container`. 
-The `local` mode is the default mode. The key difference between the two modes is that the `container` mode
+The `container` mode is the default mode. The key difference between the two modes is that the `container` mode
 executes the code inside a Docker container, which provides a more secure environment for code execution, while
 the `local` mode executes the code as a subprocess of the TaskWeaver process.
 As a result, in the `local` mode, if the user has malicious intent, the user could potentially
 instruct TaskWeaver to execute harmful code on the host machine. In addition, the LLM could also generate
 harmful code, leading to potential security risks.
 
->💡We recommend using the `container` mode for code execution, especially when the usage of the agent
-is open to untrusted users. In the `container` mode, the code is executed in a Docker container, which is isolated
-from the host machine. 
+
 
 ## How to Configure the Code Execution Mode
 
 To configure the code execution mode, you need to set the `execution_service.kernel_mode` parameter in the
 `taskweaver_config.json` file. The value of the parameter could be `local` or `container`. The default value
-is `local`.
+is `container`.
 
 TaskWeaver supports the `local` mode without any additional setup. However, to use the `container` mode,
 there are a few prerequisites:
@@ -39,8 +42,8 @@ by running the following command in the root directory of the code repository:
 cd scripts
 
 # based on your OS
-./build.ps1 # for Windows
-./build.sh # for Linux or macOS
+./build_executor.ps1 # for Windows
+./build_executor.sh # for Linux or macOS
 ```
 
 After the Docker image is built, you can run `docker images` to check if a Docker image 
@@ -48,7 +51,36 @@ named `executor_container` is available.
 If the prerequisite is met, you can now run TaskWeaver in the `container` mode.
 
 After running TaskWeaver in the `container` mode, you can check if the container is running by running `docker ps`.
-You should see a container of image `taskweaver/executor` running after executing some code. 
+You should see a container of image `taskweavercontainers/taskweaver-executor` running after executing some code. 
+
+## How to customize the Docker image for code execution
+
+You may want to customize the Docker image for code execution to include additional packages or libraries, especially
+for your developed plugins. The current Docker image for code execution is `taskweavercontainers/taskweaver-executor`, which 
+only includes the dependencies specified in the `TaskWeaver/requirements.txt` file. To customize the Docker image, you need to
+modify the `Dockerfile` at `TaskWeaver/docker/ces_container/Dockerfile` and rebuild the Docker image.
+
+When you open the `Dockerfile`, you will see the following content, and you can add additional packages or libraries
+by adding the corresponding `RUN` command. In this example, we add the `sentence-transformers` package to the Docker image.
+
+```Dockerfile
+FROM python:3.10-slim
+...
+# TODO: Install additional packages for plugins
+RUN pip install --no-cache-dir --no-warn-script-location --user sentence-transformers
+...
+```
+Then, you need to rebuild the Docker image by running the `build_executor.sh` script at `TaskWeaver/scripts/build_executor.sh` 
+or `TaskWeaver/scripts/build.ps1` depending on your operating system.
+
+```bash
+cd TaskWeaver/scripts
+./build_executor.sh
+# or ./build_executor.ps1 if you are using Windows
+```
+
+If you have successfully rebuilt the Docker image, you can check the new image by running `docker images`.
+After building the Docker image, you need to restart the TaskWeaver agent to use the new Docker image.
 
 ## Limitations of the `container` Mode
 
