@@ -2,5 +2,6 @@
   "llm.api_base": "",
   "llm.api_type": "cm",
   "llm.api_key": "",
-  "llm.model": "pretrain/Qwen1.5-72B-Chat"
+  "llm.model": "pretrain/Qwen1.5-72B-Chat",
+  "execution_service.kernel_mode": "local"
 }

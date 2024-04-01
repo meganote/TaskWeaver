@@ -24,12 +24,6 @@ class CmServiceConfig(LLMServiceConfig):
             shared_model if shared_model is not None else "pretrain/Qwen1.5-72B-Chat",
         )
 
-        shared_backup_model = self.llm_module_config.backup_model
-        self.backup_model = self._get_str(
-            "backup_model",
-            shared_backup_model if shared_backup_model is not None else self.model,
-        )
-
         shared_embedding_model = self.llm_module_config.embedding_model
         self.embedding_model = self._get_str(
             "embedding_model",
@@ -64,7 +58,6 @@ class CmService(CompletionService, EmbeddingService):
     def chat_completion(
         self,
         messages: List[ChatMessageType],
-        use_backup_engine: bool = False,
         stream: bool = True,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
@@ -73,7 +66,6 @@ class CmService(CompletionService, EmbeddingService):
         **kwargs: Any,
     ) -> Generator[ChatMessageType, None, None]:
         engine = self.config.model
-        backup_engine = self.config.backup_model
         base_url = self.config.api_base
 
         import json
