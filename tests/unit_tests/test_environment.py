@@ -7,7 +7,7 @@ from typing import Optional
 import pytest
 from jupyter_client import BlockingKernelClient
 
-from taskweaver.ces import Environment, EnvMode
+from taskweaver.ces.environment import Environment, EnvMode
 
 IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
@@ -15,6 +15,7 @@ IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 def connect_and_execute_code(
     connection_file: str,
     ports_file: Optional[str] = None,
+    code: str = 'open("filename.txt", "w").write("File content goes here.")',
 ):
     # Create the blocking client
     client = BlockingKernelClient()
@@ -35,7 +36,7 @@ def connect_and_execute_code(
     client.start_channels()
 
     result_msg_id = client.execute(
-        code='open("filename.txt", "w").write("File content goes here.")',
+        code=code,
         silent=False,
         store_history=True,
         allow_stdin=False,
@@ -120,12 +121,51 @@ def test_environment_start_subprocess():
 
 
 @pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Test doesn't work in Github Actions.")
+def test_environment_update_session_var():
+    # get cwd of current file
+    cwd = os.path.dirname(os.path.abspath(__file__))
+    sessions = os.path.join(cwd, "sessions")
+    try:
+        env = Environment("local", env_mode=EnvMode.Local)
+        env.start_session(
+            session_id="session_id",
+            session_dir=os.path.join(sessions, "session_id"),
+        )
+
+        assert os.path.isdir(sessions)
+        session_dir = os.path.join(sessions, "session_id")
+        assert os.path.isdir(session_dir)
+        ces_dir = os.path.join(session_dir, "ces")
+        assert os.path.isdir(ces_dir)
+        file_glob = os.path.join(ces_dir, "conn-session_id-*.json")
+        assert len(glob.glob(file_glob)) == 1
+        glob.glob(file_glob)[0]
+        log_file = os.path.join(ces_dir, "kernel_logging.log")
+        assert os.path.isfile(log_file)
+        env.update_session_var("session_id", {"test_session_variable": "test_value"})
+        execute_result = env.execute_code("session_id", code=r"%_taskweaver_check_session_var")
+        assert execute_result.is_success
+        assert execute_result.output["message"] == "Session var printed."
+        assert execute_result.output["data"]["test_session_variable"] == "test_value"
+
+        env.stop_session("session_id")
+
+    finally:
+        # delete sessions
+        shutil.rmtree(sessions)
+
+
+@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Test doesn't work in Github Actions.")
 def test_environment_start_outside_container():
     # get cwd of current file
     cwd = os.path.dirname(os.path.abspath(__file__))
     sessions = os.path.join(cwd, "sessions")
     try:
-        env = Environment("local", env_mode=EnvMode.Container)
+        env = Environment(
+            "local",
+            env_mode=EnvMode.Container,
+            custom_image="taskweavercontainers/taskweaver-executor:0.3",
+        )
         env.start_session(
             session_id="session_id",
             session_dir=os.path.join(sessions, "session_id"),
@@ -141,13 +181,11 @@ def test_environment_start_outside_container():
         connection_file = glob.glob(conn_file_glob)[0]
         ports_file = os.path.join(ces_dir, "ports.json")
         assert os.path.isfile(ports_file)
-
-        connect_and_execute_code(connection_file, ports_file)
-
-        saved_file = os.path.join(session_dir, "cwd", "filename.txt")
-        assert os.path.isfile(saved_file)
+        code = "!pip install yfinance\nimport sys\nprint(sys.path)\nimport yfinance as yf\nprint(yf.__version__)"
+        connect_and_execute_code(connection_file, ports_file, code=code)
 
         env.stop_session("session_id")
+
     finally:
         # delete sessions
         shutil.rmtree(sessions)

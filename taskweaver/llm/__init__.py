@@ -23,6 +23,7 @@ from taskweaver.llm.sentence_transformer import SentenceTransformerService
 from taskweaver.llm.util import ChatMessageType, format_chat_message
 from taskweaver.llm.zhipuai import ZhipuAIService
 from taskweaver.llm.cm import CmService
+from taskweaver.llm.anthropic import AnthropicService
 
 llm_completion_config_map = {
     "openai": OpenAIService,
@@ -35,6 +36,7 @@ llm_completion_config_map = {
     "zhipuai": ZhipuAIService,
     "cm": CmService,
     "groq": GroqService,
+    "anthropic": AnthropicService,
 }
 
 # TODO
@@ -70,6 +72,8 @@ class LLMApi(object):
             self._set_completion_service(CmService)
         elif self.config.api_type == "groq":
             self._set_completion_service(GroqService)
+        elif self.config.api_type == "anthropic":  # Add support for Anthropic
+            self._set_completion_service(AnthropicService)
         else:
             raise ValueError(f"API type {self.config.api_type} is not supported")
 

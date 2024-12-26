@@ -22,6 +22,7 @@ const sidebars = {
     'overview',
     'quickstart',
     'code_execution',
+    'memory',
     'FAQ',
     {
       type: 'category',
@@ -75,7 +76,7 @@ const sidebars = {
       },
       collapsible: true,
       collapsed: true,
-      items: ['llms/openai', 'llms/aoai', 'llms/liteLLM', 'llms/ollama', 'llms/gemini', 'llms/qwen', 'llms/glm', 'llms/customized_llm_api', 'llms/multi-llm'],
+      items: ['llms/openai', 'llms/aoai', 'llms/liteLLM', 'llms/ollama', 'llms/gemini', 'llms/qwen', 'llms/glm','llms/Keywords-AI', 'llms/customized_llm_api', 'llms/multi-llm'],
     },
     {
       type: 'category',
@@ -124,7 +125,10 @@ const sidebars = {
         label: 'Experience',
         collapsible: true,
         collapsed: true,
-        items: ['customization/experience'],
+        items: [
+            'customization/experience/experience',
+            'customization/experience/handcrafted_experience'
+        ],
       },
     ],
     },
@@ -145,6 +149,7 @@ const sidebars = {
       'advanced/code_verification',
       'advanced/cli_only',
       'advanced/telemetry',
+      'advanced/observability',
       'advanced/plugin_only'
       ],
     }

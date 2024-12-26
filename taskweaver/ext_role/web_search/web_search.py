@@ -1,11 +1,9 @@
-import asyncio
 import json
 import os
 import sys
 from contextlib import contextmanager
 from typing import Any, List, Tuple
 
-import requests
 from injector import inject
 
 from taskweaver.logging import TelemetryLogger
@@ -20,12 +18,13 @@ from taskweaver.role.role import RoleConfig, RoleEntry
 # response entry format: (title, url, snippet)
 ResponseEntry = Tuple[str, str, str]
 
-# suppress asyncio runtime warning
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-# suppress tqdm message
-os.environ["TQDM_DISABLE"] = "True"
+def asyncio_suppress():
+    # suppress asyncio runtime warning
+    if sys.platform == "win32":
+        import asyncio
+
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 @contextmanager
@@ -50,7 +49,7 @@ def browse_page(
     query: str,
     urls: List[str],
     top_k: int = 3,
-    chunk_size: int = 1000,
+    chunk_size: int = 2000,
     chunk_overlap: int = 250,
     post_proxy: PostEventProxy = None,
 ) -> list[dict[str, Any]]:
@@ -133,6 +132,8 @@ class WebSearchConfig(RoleConfig):
         self.google_api_key = self._get_str("google_api_key", "")
         self.google_search_engine_id = self._get_str("google_search_engine_id", "")
         self.bing_api_key = self._get_str("bing_api_key", "")
+        self.chunk_size = self._get_int("chunk_size", 2000)
+        self.chunk_overlap = self._get_int("chunk_overlap", 500)
 
 
 class WebSearch(Role):
@@ -147,11 +148,15 @@ class WebSearch(Role):
     ):
         super().__init__(config, logger, tracing, event_emitter, role_entry)
 
+        asyncio_suppress()
+
         self.api_provider = config.api_provider
         self.result_count = config.result_count
         self.google_api_key = config.google_api_key
         self.google_search_engine_id = config.google_search_engine_id
         self.bing_api_key = config.bing_api_key
+        self.chunk_size = config.chunk_size
+        self.chunk_overlap = config.chunk_overlap
 
     def close(self) -> None:
         super().close()
@@ -192,7 +197,13 @@ class WebSearch(Role):
             + PromptUtil.wrap_text_with_delimiter(
                 "\n```json\n"
                 + json.dumps(
-                    browse_page(",".join(queries), list(query_urls), post_proxy=post_proxy),
+                    browse_page(
+                        ",".join(queries),
+                        list(query_urls),
+                        post_proxy=post_proxy,
+                        chunk_size=self.chunk_size,
+                        chunk_overlap=self.chunk_overlap,
+                    ),
                     indent=4,
                 )
                 + "```\n",
@@ -203,6 +214,8 @@ class WebSearch(Role):
         return post_proxy.end()
 
     def _search_google_custom_search(self, query: str, cnt: int) -> List[ResponseEntry]:
+        import requests
+
         url = (
             f"https://www.googleapis.com/customsearch/v1?key={self.google_api_key}&"
             f"cx={self.google_search_engine_id}&q={query}"
@@ -216,6 +229,8 @@ class WebSearch(Role):
         return result_list
 
     def _search_bing(self, query: str, cnt: int) -> List[ResponseEntry]:
+        import requests
+
         url = f"https://api.bing.microsoft.com/v7.0/search?q={query}"
         if cnt > 0:
             url += f"&count={cnt}"

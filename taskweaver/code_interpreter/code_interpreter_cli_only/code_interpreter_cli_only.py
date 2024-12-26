@@ -4,6 +4,7 @@ from injector import inject
 
 from taskweaver.code_interpreter.code_executor import CodeExecutor
 from taskweaver.code_interpreter.code_interpreter_cli_only import CodeGeneratorCLIOnly
+from taskweaver.code_interpreter.interpreter import Interpreter
 from taskweaver.logging import TelemetryLogger
 from taskweaver.memory import Memory, Post
 from taskweaver.memory.attachment import AttachmentType
@@ -19,7 +20,7 @@ class CodeInterpreterConfig(RoleConfig):
         self.max_retry_count = self._get_int("max_retry_count", 3)
 
 
-class CodeInterpreterCLIOnly(Role):
+class CodeInterpreterCLIOnly(Role, Interpreter):
     @inject
     def __init__(
         self,
@@ -41,20 +42,25 @@ class CodeInterpreterCLIOnly(Role):
 
         self.logger.info(f"{self.alias} initialized successfully.")
 
+    def update_session_variables(self, session_variables: dict) -> None:
+        assert False, "Not implemented"
+
     @tracing_decorator
     def reply(
         self,
         memory: Memory,
         prompt_log_path: Optional[str] = None,
+        **kwargs: ...,
     ) -> Post:
         post_proxy = self.event_emitter.create_post_proxy(self.alias)
+        self.executor.start()
         self.generator.reply(
             memory,
             post_proxy=post_proxy,
             prompt_log_path=prompt_log_path,
         )
 
-        code = post_proxy.post.get_attachment(type=AttachmentType.python)[0]
+        code = post_proxy.post.get_attachment(type=AttachmentType.reply_content)[0]
         if len(code) == 0:
             post_proxy.update_message(post_proxy.post.get_attachment(type=AttachmentType.thought)[0], is_end=True)
             return post_proxy.end()

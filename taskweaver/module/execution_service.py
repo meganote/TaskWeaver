@@ -19,14 +19,20 @@ class ExecutionServiceConfig(ModuleConfig):
             "kernel_mode",
             "container",
         )
+        assert self.kernel_mode in ["local", "container"], f"Invalid kernel mode: {self.kernel_mode}"
         if self.kernel_mode == "local":
             print(
                 "TaskWeaver is running in the `local` mode. This implies that "
                 "the code execution service will run on the same machine as the TaskWeaver server. "
                 "For better security, it is recommended to run the code execution service in the `container` mode. "
                 "More information can be found in the documentation "
-                "(https://microsoft.github.io/TaskWeaver/docs/advanced/code_execution).",
+                "(https://microsoft.github.io/TaskWeaver/docs/code_execution/).",
             )
+        self.custom_image = self._get_str(
+            "custom_image",
+            default=None,
+            required=False,
+        )
 
 
 class ExecutionServiceModule(Module):
@@ -39,5 +45,6 @@ class ExecutionServiceModule(Module):
             self.manager = code_execution_service_factory(
                 env_dir=config.env_dir,
                 kernel_mode=config.kernel_mode,
+                custom_image=config.custom_image,
             )
         return self.manager

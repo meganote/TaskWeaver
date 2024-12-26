@@ -1,5 +1,6 @@
 import os
 import shutil
+import subprocess
 import sys
 import warnings
 from typing import Optional, Tuple
@@ -23,12 +24,26 @@ class TaskWeaverVirtualUser(VirtualUser):
         self.session = self.app.get_session()
         self.session_id = self.session.session_id
 
-    def get_reply_from_agent(self, message: str) -> str:
+    def get_reply_from_agent(self, message: str, verbose: bool = False) -> str:
         response_round = self.session.send_message(
             message,
             event_handler=None,
         )
         assert response_round.state != "failed", "Failed to get response from agent."
+        if verbose:
+            verbose_response = "\n Below are conversation details inside the Agent: \n"
+            for post in response_round.post_list:
+                message = f"{post.send_from} -> {post.send_to}: {post.message}"
+                verbose_response += f"{message}\n"
+                # uncomment the following code block if you want to see the attachments during the evaluation
+                # for atta in post.attachment_list:
+                #     atta_type = atta.type.value
+                #     atta_content = atta.content
+                #     if atta_type in  ["plan", "current_plan_step", "thought", "python",
+                # "execution_status", "execution_result"]:
+                #         atta_message = f"# {atta_type}: {atta_content}"
+                #         verbose_response += f"  {atta_message}\n"
+            return verbose_response
         return response_round.post_list[-1].message
 
     def close(self):
@@ -45,9 +60,23 @@ def auto_evaluate_for_taskweaver(
     task_description = eval_meta_data["task_description"]
     dependencies = eval_meta_data.get("dependencies", [])
     data_files = eval_meta_data.get("data_files", [])
+    pre_command = eval_meta_data.get("pre_command", [])
+    verbose = eval_meta_data.get("verbose", False)
 
     for dependency in dependencies:
         check_package_version(dependency)
+
+    for command in pre_command:
+        # run the command
+        # subprocess.run(command, shell=True)
+        result = subprocess.run(command, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        # result = subprocess.check_output(command.split(" "), stderr=subprocess.STDOUT)
+        if result.returncode == 0:
+            print("Precommand executed successfully")
+            print(result.stdout)
+        else:
+            print("Command failed")
+            print(result.stderr)
 
     taskweaver_vuser = TaskWeaverVirtualUser(task_description, app_dir, config_var)
     taskweaver_evaluator = Evaluator()
@@ -59,9 +88,12 @@ def auto_evaluate_for_taskweaver(
             raise FileNotFoundError(f"Data file {data_file} is not found.")
         else:
             file_path = os.path.join(eval_case_dir, data_file)
-            shutil.copy(file_path, working_directory)
+            if os.path.isfile(file_path):
+                shutil.copy(file_path, working_directory)
+            else:
+                shutil.copytree(file_path, os.path.join(working_directory, data_file))
 
-    chat_history = taskweaver_vuser.talk_with_agent()
+    chat_history = taskweaver_vuser.talk_with_agent(verbose=verbose)
 
     score_points = eval_meta_data["scoring_points"]
     score_points = [ScoringPoint(**score_point) for score_point in score_points]
@@ -81,13 +113,14 @@ def batch_auto_evaluate_for_taskweaver(
     result_file_path: str,
     eval_case_root: str,
     flush_result_file: bool = False,
+    sleep_time: int = 0,
 ):
     if not os.path.exists(result_file_path):
         df = pd.DataFrame(columns=["case_file", "score", "normalized_score"])
         df.to_csv(result_file_path, index=False)
 
-    results = pd.read_csv(result_file_path)
-    evaluated_case_files = results["case_file"].tolist()
+    results = pd.read_csv(result_file_path, dtype={"case_file": str})
+    evaluated_case_files = [str(f) for f in results["case_file"].tolist()]
     if flush_result_file:
         evaluated_case_files = []
     print(f"Evaluated case files: {evaluated_case_files}")
@@ -114,6 +147,12 @@ def batch_auto_evaluate_for_taskweaver(
         print("------------Finished evaluating------------", eval_case_dir)
 
         results.to_csv(result_file_path, index=False)
+
+        if sleep_time > 0:
+            print(f"Sleeping for {sleep_time} seconds...")
+            import time
+
+            time.sleep(sleep_time)
 
 
 if __name__ == "__main__":
@@ -154,6 +193,13 @@ if __name__ == "__main__":
         action="store_true",
         help="Flush the result file",
     )
+    parser.add_argument(
+        "-s",
+        "--sleep",
+        type=int,
+        default=0,
+        help="Sleep time between evaluations",
+    )
 
     args = parser.parse_args()
 
@@ -165,4 +211,5 @@ if __name__ == "__main__":
             args.result,
             args.path,
             flush_result_file=args.fresh,
+            sleep_time=args.sleep,
         )
